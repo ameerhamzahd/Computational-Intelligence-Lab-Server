@@ -29,7 +29,19 @@ const pdfUpload = multer({
   },
 });
 
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter(req, file, callback) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      return callback(new AppError('Only JPG, PNG, or WebP images are allowed.', 400));
+    }
+    callback(null, true);
+  },
+});
+
 module.exports = upload;
+module.exports.imageUpload = imageUpload;
 module.exports.pdfUpload = pdfUpload;
 module.exports.replacementUpload = upload.fields([
   { name: 'paper_file', maxCount: 1 },

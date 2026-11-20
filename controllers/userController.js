@@ -7,7 +7,11 @@ const {
   findUserByScholarId,
   updateUserProfile,
   findUsers,
+  setAvatar,
+  getAvatarPublicId,
+  clearAvatar,
 } = require('../models/userModel');
+const { uploadBuffer, destroyResource } = require('../config/cloudinary');
 const { createToken } = require('./authController');
 const { findLatestRequestByUserId } = require('../models/memberRequestModel');
 
@@ -20,6 +24,7 @@ function serializeUser(user) {
     institution: user.institution,
     role: user.role,
     appRole: user.app_role,
+    avatarUrl: user.avatar_url || null,
   };
 }
 
@@ -93,4 +98,45 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
   const user = await updateUserProfile(req.user.id, changes);
   if (!user) return next(new AppError('No profile changes were provided.', 400));
   res.json({ success: true, message: 'Profile updated successfully.', user: serializeUser(user) });
+});
+
+// Best effort: a failed cleanup must never fail the user's request.
+async function discardImage(publicId) {
+  if (!publicId) return;
+  try {
+    await destroyResource(publicId, { resource_type: 'image', invalidate: true });
+  } catch (err) {
+    console.error('Failed to delete old avatar:', err.message);
+  }
+}
+
+exports.uploadAvatar = catchAsync(async (req, res, next) => {
+  if (!req.file) return next(new AppError('Choose an image to upload.', 400));
+
+  const result = await uploadBuffer(req.file.buffer, {
+    folder: 'cilab/avatars',
+    resource_type: 'image',
+    public_id: `${req.user.id}-${Date.now()}`,
+    overwrite: false,
+    // Square, face-centred crop so every avatar renders consistently.
+    transformation: [{ width: 512, height: 512, crop: 'fill', gravity: 'face' }],
+    quality: 'auto',
+    fetch_format: 'auto',
+  });
+
+  const saved = await setAvatar(req.user.id, result.secure_url, result.public_id);
+  if (!saved) {
+    await discardImage(result.public_id);
+    return next(new AppError('User not found.', 404));
+  }
+  await discardImage(saved.previous_public_id);
+
+  res.json({ success: true, message: 'Profile photo updated.', avatarUrl: saved.avatar_url });
+});
+
+exports.deleteAvatar = catchAsync(async (req, res) => {
+  const publicId = await getAvatarPublicId(req.user.id);
+  await clearAvatar(req.user.id);
+  await discardImage(publicId);
+  res.json({ success: true, message: 'Profile photo removed.', avatarUrl: null });
 });

@@ -245,7 +245,8 @@ async function deleteUser(id) {
 
 async function getUserById(id) {
   const result = await pool.query(
-    `SELECT id, name, email, scholar_id, institution, role, app_role, status, created_at, last_active_at
+    `SELECT id, name, email, scholar_id, institution, role, app_role, status, created_at, last_active_at,
+            avatar_url, avatar_public_id
        FROM users WHERE id = $1`,
     [id]
   );
@@ -278,7 +279,7 @@ async function updateUserProfile(id, changes) {
   const result = await pool.query(
     `UPDATE users SET ${fields.join(', ')}
       WHERE id = $${values.length}
-      RETURNING id, name, email, scholar_id, institution, role, app_role, status`,
+      RETURNING id, name, email, scholar_id, institution, role, app_role, status, avatar_url`,
     values
   );
   return result.rows[0];
@@ -319,7 +320,64 @@ async function updatePasswordWithResetToken(userId, passwordHash) {
   return result.rows[0];
 }
 
+/** Returns the previous avatar's public id so the caller can delete the old image. */
+async function setAvatar(userId, url, publicId) {
+  const result = await pool.query(
+    `UPDATE users u
+        SET avatar_url = $2, avatar_public_id = $3
+       FROM (SELECT id, avatar_public_id FROM users WHERE id = $1) prev
+      WHERE u.id = prev.id
+      RETURNING u.avatar_url, prev.avatar_public_id AS previous_public_id`,
+    [userId, url, publicId]
+  );
+  return result.rows[0];
+}
+
+async function getAvatarPublicId(userId) {
+  const result = await pool.query('SELECT avatar_public_id FROM users WHERE id = $1', [userId]);
+  return result.rows[0]?.avatar_public_id || null;
+}
+
+async function clearAvatar(userId) {
+  await pool.query('UPDATE users SET avatar_url = NULL, avatar_public_id = NULL WHERE id = $1', [userId]);
+}
+
+async function getShareToken(userId) {
+  const result = await pool.query('SELECT share_token FROM users WHERE id = $1', [userId]);
+  return result.rows[0]?.share_token || null;
+}
+
+/** Stores a token only if none exists yet, so concurrent clicks keep one stable link. */
+async function setShareTokenIfMissing(userId, token) {
+  const result = await pool.query(
+    `UPDATE users SET share_token = COALESCE(share_token, $2)
+      WHERE id = $1 RETURNING share_token`,
+    [userId, token]
+  );
+  return result.rows[0]?.share_token || null;
+}
+
+async function clearShareToken(userId) {
+  await pool.query('UPDATE users SET share_token = NULL WHERE id = $1', [userId]);
+}
+
+async function findUserByShareToken(token) {
+  const result = await pool.query(
+    `SELECT id, name, email, scholar_id, institution, role, avatar_url
+       FROM users WHERE share_token = $1 AND status = 'active'`,
+    [token]
+  );
+  return result.rows[0];
+}
+
 module.exports = {
+  setAvatar,
+  getAvatarPublicId,
+  clearAvatar,
+  getShareToken,
+  setShareTokenIfMissing,
+  clearShareToken,
+  findUserByShareToken,
   findUserByEmail,
   findUserByScholarId,
   createUser,

@@ -33,6 +33,10 @@ async function initializeDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS share_token TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_public_id TEXT`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_share_token_key ON users (share_token) WHERE share_token IS NOT NULL`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pending_registrations (
       id TEXT PRIMARY KEY,

@@ -54,6 +54,25 @@ function authoredByEmailCondition(emailParameter = '$2') {
   )`;
 }
 
+async function findApprovedUploadsByUser(userId, email) {
+  const canMatchAuthor = typeof email === 'string' && email.trim().length > 0;
+  const values = canMatchAuthor ? [userId, email] : [userId];
+  const ownershipCondition = canMatchAuthor
+    ? `(u.user_id = $1 OR ${authoredByEmailCondition()})`
+    : 'u.user_id = $1';
+
+  const result = await pool.query(
+    `SELECT u.id, u.upload_type, u.title, u.metadata, u.cloudinary_url,
+            u.file_size, u.created_at, usr.name AS author_name
+       FROM uploads u
+       JOIN users usr ON usr.id = u.user_id
+      WHERE u.status = 'approved' AND ${ownershipCondition}
+      ORDER BY u.created_at DESC`,
+    values
+  );
+  return result.rows;
+}
+
 async function findUploadsByUser(userId, email) {
   const canMatchAuthor = typeof email === 'string' && email.trim().length > 0;
   const values = canMatchAuthor ? [userId, email] : [userId];
@@ -298,6 +317,7 @@ module.exports = {
   createUpload,
   updateUploadFeatured,
   findUploadsByUser,
+  findApprovedUploadsByUser,
   updateUploadByUser,
   deleteUploadByUser,
   findPublishedUploads,

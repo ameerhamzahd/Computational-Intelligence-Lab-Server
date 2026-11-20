@@ -12,6 +12,7 @@ const memberRequestRoutes = require('./routes/memberRequestRoutes');
 const publicStatsRoutes = require('./routes/publicStatsRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const publicAnnouncementRoutes = require('./routes/publicAnnouncementRoutes');
+const publicContributorRoutes = require('./routes/publicContributorRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { initializeDb } = require('./config/db');
 
@@ -62,6 +63,7 @@ app.use('/api/research', researchRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/member-requests', memberRequestRoutes);
 app.use('/api/stats', publicStatsRoutes);
+app.use('/api/contributors', publicContributorRoutes);
 app.use('/api/announcements', publicAnnouncementRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/access-requests', accessRequestRoutes);
